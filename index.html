@@ -1,0 +1,209 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cyber Detect - Advanced Security Log Analysis</title>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        primary: {
+                            50: '#eff6ff',
+                            100: '#dbeafe',
+                            200: '#bfdbfe',
+                            300: '#93c5fd',
+                            400: '#60a5fa',
+                            500: '#3b82f6',
+                            600: '#2563eb',
+                            700: '#1d4ed8',
+                            800: '#1e40af',
+                            900: '#1e3a8a',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+</head>
+<body class="bg-gray-50 dark:bg-gray-900 min-h-screen transition-colors duration-300">
+    <div id="app">
+        <!-- Header -->
+        <header class="bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700 transition-colors duration-300">
+            <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                <div class="flex justify-between items-center py-6">
+                    <!-- Logo and Title -->
+                    <div class="flex items-center space-x-3">
+                        <div class="w-12 h-12 bg-primary-100 dark:bg-primary-900 rounded-lg flex items-center justify-center">
+                            <i class="fas fa-shield-alt text-primary-600 dark:text-primary-400 text-xl"></i>
+                        </div>
+                        <div>
+                            <h1 class="text-2xl font-bold text-gray-900 dark:text-white">Cyber Detect</h1>
+                            <p class="text-gray-600 dark:text-gray-400 text-sm">Advanced Security Log Analysis</p>
+                        </div>
+                    </div>
+                    
+                    <!-- Dark Mode Toggle -->
+                    <button 
+                        @click="toggleDarkMode"
+                        class="p-2 rounded-lg bg-gray-100 hover:bg-gray-200 dark:bg-gray-700 dark:hover:bg-gray-600 transition-colors duration-200"
+                    >
+                        <i :class="darkMode ? 'fas fa-sun text-yellow-500' : 'fas fa-moon text-gray-600'" class="text-lg"></i>
+                    </button>
+                </div>
+                
+                <!-- Navigation Tabs -->
+                <nav class="flex space-x-8 border-b border-gray-200 dark:border-gray-700">
+                    <button 
+                        v-for="tab in tabs" 
+                        :key="tab.id"
+                        @click="activeTab = tab.id"
+                        :class="[
+                            'py-3 px-1 border-b-2 font-medium text-sm transition-colors duration-200',
+                            activeTab === tab.id 
+                                ? 'border-primary-500 text-primary-600 dark:text-primary-400' 
+                                : 'border-transparent text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-300 hover:border-gray-300'
+                        ]"
+                    >
+                        <i :class="tab.icon" class="mr-2"></i>
+                        {{ tab.name }}
+                    </button>
+                </nav>
+            </div>
+        </header>
+
+        <!-- Main Content -->
+        <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+            <!-- Overview Tab Content -->
+            <div v-if="activeTab === 'overview'">
+                <div class="mb-8">
+                    <h2 class="text-2xl font-bold text-gray-900 dark:text-white mb-2">Upload Log File or Try Demo</h2>
+                </div>
+
+                <!-- Demo Dataset Card -->
+                <div class="mb-8">
+                    <div class="border-2 border-dashed border-primary-200 dark:border-primary-800 rounded-lg p-6 bg-primary-50 dark:bg-gray-800/50 transition-colors duration-300">
+                        <div class="flex items-start justify-between">
+                            <div class="flex items-start space-x-4">
+                                <div class="w-12 h-12 bg-primary-500 rounded-lg flex items-center justify-center flex-shrink-0">
+                                    <i class="fas fa-database text-white text-lg"></i>
+                                </div>
+                                <div class="flex-1">
+                                    <div class="flex items-center space-x-2 mb-2">
+                                        <h3 class="text-lg font-semibold text-gray-900 dark:text-white">Demo Dataset</h3>
+                                        <i class="fas fa-external-link-alt text-gray-400 text-sm"></i>
+                                    </div>
+                                    <p class="text-primary-600 dark:text-primary-400 font-medium mb-3">Synthetic Apache Server Logs</p>
+                                    <p class="text-gray-700 dark:text-gray-300 leading-relaxed mb-4">
+                                        Test the application with pre-generated Apache server logs containing various security threats and attack patterns. Perfect for exploring all detection capabilities without needing your own log files.
+                                    </p>
+                                    <div class="flex items-center space-x-4 text-sm text-gray-600 dark:text-gray-400">
+                                        <span class="flex items-center">
+                                            <i class="fas fa-download mr-1"></i>
+                                            ZIP Format
+                                        </span>
+                                        <span class="flex items-center">
+                                            <i class="fas fa-check-circle mr-1"></i>
+                                            Ready to Use
+                                        </span>
+                                    </div>
+                                </div>
+                            </div>
+                            <button 
+                                @click="loadDemo"
+                                :disabled="isLoadingDemo"
+                                :class="[
+                                    'ml-4 px-6 py-2 rounded-lg font-medium transition-colors duration-200 flex items-center space-x-2 flex-shrink-0',
+                                    isLoadingDemo 
+                                        ? 'bg-gray-400 cursor-not-allowed text-white' 
+                                        : 'bg-primary-600 hover:bg-primary-700 text-white'
+                                ]"
+                            >
+                                <div v-if="isLoadingDemo" class="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                                <i v-else class="fas fa-play"></i>
+                                <span>{{ isLoadingDemo ? 'Loading...' : 'Load Demo' }}</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Upload Section -->
+                <div class="text-center mb-6">
+                    <span class="text-gray-500 dark:text-gray-400">Or upload your own file</span>
+                </div>
+
+                <!-- File Upload Area -->
+                <div 
+                    @drop.prevent="handleFileDrop"
+                    @dragover.prevent
+                    @dragenter.prevent
+                    :class="[
+                        'border-2 border-dashed rounded-lg p-12 text-center transition-colors duration-300',
+                        isDragOver 
+                            ? 'border-primary-400 bg-primary-50 dark:bg-primary-900/20' 
+                            : 'border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-800'
+                    ]"
+                    @dragenter="isDragOver = true"
+                    @dragleave="isDragOver = false"
+                >
+                    <div class="mx-auto w-16 h-16 bg-gray-100 dark:bg-gray-700 rounded-lg flex items-center justify-center mb-4">
+                        <i class="fas fa-upload text-gray-400 text-2xl"></i>
+                    </div>
+                    <h3 class="text-xl font-medium text-gray-900 dark:text-white mb-2">Upload Log File</h3>
+                    <p class="text-gray-600 dark:text-gray-400 mb-1">Drag and drop your log file here, or click to select</p>
+                    <p class="text-sm text-gray-500 dark:text-gray-500">Supported formats: .log, .txt, .zip, .gz • Max size: 100MB</p>
+                    
+                    <input 
+                        type="file" 
+                        @change="handleFileSelect"
+                        accept=".log,.txt,.zip,.gz"
+                        class="hidden"
+                        ref="fileInput"
+                    >
+                    
+                    <button 
+                        @click="$refs.fileInput.click()"
+                        class="mt-6 bg-white dark:bg-gray-700 text-gray-700 dark:text-gray-300 border border-gray-300 dark:border-gray-600 px-6 py-2 rounded-lg font-medium hover:bg-gray-50 dark:hover:bg-gray-600 transition-colors duration-200"
+                    >
+                        Choose File
+                    </button>
+                    
+                    <!-- File Info -->
+                    <div v-if="selectedFile" class="mt-4 p-4 bg-gray-50 dark:bg-gray-700 rounded-lg">
+                        <div class="flex items-center justify-center space-x-2">
+                            <i class="fas fa-file text-primary-500"></i>
+                            <span class="text-gray-900 dark:text-white font-medium">{{ selectedFile.name }}</span>
+                            <span class="text-gray-500 dark:text-gray-400">({{ formatFileSize(selectedFile.size) }})</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Dashboard Tab Content -->
+            <div v-if="activeTab === 'dashboard'" class="text-center py-16">
+                <div class="w-24 h-24 bg-gray-100 dark:bg-gray-700 rounded-lg flex items-center justify-center mx-auto mb-4">
+                    <i class="fas fa-chart-bar text-gray-400 text-3xl"></i>
+                </div>
+                <h3 class="text-xl font-medium text-gray-900 dark:text-white mb-2">Dashboard Coming Soon</h3>
+                <p class="text-gray-600 dark:text-gray-400">Analytics and visualizations will be available here.</p>
+            </div>
+
+            <!-- Data Table Tab Content -->
+            <div v-if="activeTab === 'data-table'" class="text-center py-16">
+                <div class="w-24 h-24 bg-gray-100 dark:bg-gray-700 rounded-lg flex items-center justify-center mx-auto mb-4">
+                    <i class="fas fa-table text-gray-400 text-3xl"></i>
+                </div>
+                <h3 class="text-xl font-medium text-gray-900 dark:text-white mb-2">Data Table Coming Soon</h3>
+                <p class="text-gray-600 dark:text-gray-400">Log data table view will be available here.</p>
+            </div>
+        </main>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
