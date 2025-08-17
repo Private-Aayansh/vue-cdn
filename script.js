@@ -46,11 +46,11 @@ createApp({
                     name: 'Security Analysis',
                     icon: 'fas fa-shield-alt'
                 },
-                {
-                    id: 'dashboard',
-                    name: 'Dashboard',
-                    icon: 'fas fa-chart-bar'
-                },
+                // {
+                //     id: 'dashboard',
+                //     name: 'Dashboard',
+                //     icon: 'fas fa-chart-bar'
+                // },
                 {
                     id: 'data-table',
                     name: 'Data Table',
