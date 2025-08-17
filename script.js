@@ -17,6 +17,29 @@ createApp({
             showFunctionModal: false,
             currentFunctionName: '',
             currentFunctionCode: '',
+            showResultsModal: false,
+            currentResults: [],
+            currentResultsTitle: '',
+            // Filters for results modal
+            resultsFilters: {
+                search: '',
+                ipAddress: '',
+                attackType: [],
+                httpMethod: [],
+                statusCode: []
+            },
+            resultsCurrentPage: 1,
+            resultsPerPage: 50,
+            // Data table filters
+            dataTableFilters: {
+                search: '',
+                ipAddress: '',
+                attackType: [],
+                httpMethod: [],
+                statusCode: []
+            },
+            dataTableCurrentPage: 1,
+            dataTablePerPage: 50,
             tabs: [
                 {
                     id: 'security-analysis',
@@ -360,6 +383,147 @@ createApp({
                 console.error('Error viewing function:', error);
                 this.showNotification(`Error viewing function: ${error.message}`, 'error');
             }
+        },
+        viewResults(endpoint) {
+            const results = this.threatResults[endpoint] || [];
+            const attackType = this.attackTypes.find(a => a.endpoint === endpoint);
+            
+            this.currentResults = results;
+            this.currentResultsTitle = attackType?.name || endpoint;
+            this.showResultsModal = true;
+            this.resultsCurrentPage = 1;
+            this.resetResultsFilters();
+        },
+        resetResultsFilters() {
+            this.resultsFilters = {
+                search: '',
+                ipAddress: '',
+                attackType: [],
+                httpMethod: [],
+                statusCode: []
+            };
+        },
+        resetDataTableFilters() {
+            this.dataTableFilters = {
+                search: '',
+                ipAddress: '',
+                attackType: [],
+                httpMethod: [],
+                statusCode: []
+            };
+        },
+        getFilteredResults(results, filters) {
+            return results.filter(result => {
+                // Search filter
+                if (filters.search) {
+                    const searchTerm = filters.search.toLowerCase();
+                    const searchableFields = [
+                        result.ip, result.path, result.user_agent, 
+                        result.referrer, result.suspicion_reason
+                    ].join(' ').toLowerCase();
+                    
+                    if (!searchableFields.includes(searchTerm)) {
+                        return false;
+                    }
+                }
+                
+                // IP Address filter
+                if (filters.ipAddress && !result.ip.includes(filters.ipAddress)) {
+                    return false;
+                }
+                
+                // Attack Type filter
+                if (filters.attackType.length > 0) {
+                    const attackTypeName = this.getAttackTypeName(result);
+                    if (!filters.attackType.includes(attackTypeName)) {
+                        return false;
+                    }
+                }
+                
+                // HTTP Method filter
+                if (filters.httpMethod.length > 0 && !filters.httpMethod.includes(result.method)) {
+                    return false;
+                }
+                
+                // Status Code filter
+                if (filters.statusCode.length > 0 && !filters.statusCode.includes(result.status)) {
+                    return false;
+                }
+                
+                return true;
+            });
+        },
+        getAttackTypeName(result) {
+            // Try to determine attack type from suspicion reason or other fields
+            const reason = result.suspicion_reason?.toLowerCase() || '';
+            
+            if (reason.includes('sql injection')) return 'SQL Injection';
+            if (reason.includes('path traversal')) return 'Path Traversal';
+            if (reason.includes('bot')) return 'Bot Detection';
+            if (reason.includes('lfi') || reason.includes('rfi')) return 'LFI/RFI Attacks';
+            if (reason.includes('wordpress')) return 'WordPress Probes';
+            if (reason.includes('brute force')) return 'Brute Force';
+            if (reason.includes('error')) return 'HTTP Errors';
+            if (reason.includes('internal ip')) return 'Internal IP Access';
+            
+            return 'Unknown';
+        },
+        getPaginatedResults(results, currentPage, perPage) {
+            const startIndex = (currentPage - 1) * perPage;
+            const endIndex = startIndex + perPage;
+            return results.slice(startIndex, endIndex);
+        },
+        getTotalPages(totalItems, perPage) {
+            return Math.ceil(totalItems / perPage);
+        },
+        getAllResults() {
+            const allResults = [];
+            Object.keys(this.threatResults).forEach(endpoint => {
+                const results = this.threatResults[endpoint] || [];
+                results.forEach(result => {
+                    allResults.push({
+                        ...result,
+                        attack_type: this.getAttackTypeName(result)
+                    });
+                });
+            });
+            return allResults;
+        },
+        getUniqueValues(results, field) {
+            const values = results.map(result => result[field]).filter(Boolean);
+            return [...new Set(values)].sort();
+        },
+        toggleFilter(filterArray, value) {
+            const index = filterArray.indexOf(value);
+            if (index > -1) {
+                filterArray.splice(index, 1);
+            } else {
+                filterArray.push(value);
+            }
+        },
+        clearAllFilters(filterType) {
+            if (filterType === 'results') {
+                this.resetResultsFilters();
+            } else if (filterType === 'dataTable') {
+                this.resetDataTableFilters();
+                this.dataTableCurrentPage = 1;
+            }
+        },
+        formatTimestamp(timestamp) {
+            try {
+                const date = new Date(timestamp);
+                return date.toLocaleString();
+            } catch {
+                return timestamp;
+            }
+        },
+        getStatusBadgeClass(status) {
+            const statusCode = parseInt(status);
+            if (statusCode >= 200 && statusCode < 300) return 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400';
+            if (statusCode >= 300 && statusCode < 400) return 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400';
+            if (statusCode >= 400 && statusCode < 500) return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400';
+            if (statusCode >= 500) return 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400';
+            return 'bg-gray-100 text-gray-800 dark:bg-gray-900/30 dark:text-gray-400';
         },
         showNotification(message, type = 'info') {
             // Simple notification system

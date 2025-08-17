@@ -292,6 +292,19 @@
                                 <i class="fas fa-code"></i>
                                 <span>View Function</span>
                             </button>
+                            <button 
+                                @click="viewResults(attack.endpoint)"
+                                :disabled="!threatResults[attack.endpoint] || threatResults[attack.endpoint].length === 0"
+                                :class="[
+                                    'w-full px-4 py-2 rounded-lg font-medium transition-colors duration-200 flex items-center justify-center space-x-2',
+                                    !threatResults[attack.endpoint] || threatResults[attack.endpoint].length === 0
+                                        ? 'bg-gray-400 cursor-not-allowed text-white' 
+                                        : 'bg-green-600 hover:bg-green-700 text-white'
+                                ]"
+                            >
+                                <i class="fas fa-eye"></i>
+                                <span>View Results</span>
+                            </button>
                         </div>
                     </div>
                 </div>
@@ -307,12 +320,197 @@
             </div>
 
             <!-- Data Table Tab Content -->
-            <div v-if="activeTab === 'data-table'" class="text-center py-16">
-                <div class="w-24 h-24 bg-gray-100 dark:bg-gray-700 rounded-lg flex items-center justify-center mx-auto mb-4">
-                    <i class="fas fa-table text-gray-400 text-3xl"></i>
+            <div v-if="activeTab === 'data-table'">
+                <div class="mb-8">
+                    <h2 class="text-2xl font-bold text-gray-900 dark:text-white mb-2">Security Data Table</h2>
+                    <p class="text-gray-600 dark:text-gray-400">View all detected security threats in a comprehensive table format</p>
                 </div>
-                <h3 class="text-xl font-medium text-gray-900 dark:text-white mb-2">Data Table Coming Soon</h3>
-                <p class="text-gray-600 dark:text-gray-400">Log data table view will be available here.</p>
+
+                <!-- No Data Message -->
+                <div v-if="getAllResults().length === 0" class="text-center py-16">
+                    <div class="w-24 h-24 bg-gray-100 dark:bg-gray-700 rounded-lg flex items-center justify-center mx-auto mb-4">
+                        <i class="fas fa-table text-gray-400 text-3xl"></i>
+                    </div>
+                    <h3 class="text-xl font-medium text-gray-900 dark:text-white mb-2">No Data Available</h3>
+                    <p class="text-gray-600 dark:text-gray-400">Run security scans to see results in the data table.</p>
+                </div>
+
+                <!-- Data Table with Filters -->
+                <div v-else class="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
+                    <div class="flex">
+                        <!-- Left Sidebar - Filters -->
+                        <div class="w-80 border-r border-gray-200 dark:border-gray-700 p-6">
+                            <div class="flex items-center justify-between mb-6">
+                                <h3 class="text-lg font-semibold text-gray-900 dark:text-white">Filters</h3>
+                                <button 
+                                    @click="clearAllFilters('dataTable')"
+                                    class="text-sm text-primary-600 hover:text-primary-700 dark:text-primary-400"
+                                >
+                                    Clear All
+                                </button>
+                            </div>
+
+                            <!-- Search Filter -->
+                            <div class="mb-6">
+                                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Search</label>
+                                <input 
+                                    v-model="dataTableFilters.search"
+                                    type="text"
+                                    placeholder="Search all fields..."
+                                    class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                                >
+                            </div>
+
+                            <!-- IP Address Filter -->
+                            <div class="mb-6">
+                                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">IP Address</label>
+                                <input 
+                                    v-model="dataTableFilters.ipAddress"
+                                    type="text"
+                                    placeholder="Filter by IP..."
+                                    class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white"
+                                >
+                            </div>
+
+                            <!-- Attack Type Filter -->
+                            <div class="mb-6">
+                                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Attack Type</label>
+                                <div class="space-y-2 max-h-40 overflow-y-auto">
+                                    <div 
+                                        v-for="attackType in getUniqueValues(getAllResults(), 'attack_type')" 
+                                        :key="attackType"
+                                        class="flex items-center"
+                                    >
+                                        <input 
+                                            type="checkbox"
+                                            :checked="dataTableFilters.attackType.includes(attackType)"
+                                            @change="toggleFilter(dataTableFilters.attackType, attackType)"
+                                            class="mr-2"
+                                        >
+                                        <span class="text-sm text-gray-700 dark:text-gray-300">{{ attackType }}</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- HTTP Method Filter -->
+                            <div class="mb-6">
+                                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">HTTP Method</label>
+                                <div class="space-y-2">
+                                    <div 
+                                        v-for="method in getUniqueValues(getAllResults(), 'method')" 
+                                        :key="method"
+                                        class="flex items-center"
+                                    >
+                                        <input 
+                                            type="checkbox"
+                                            :checked="dataTableFilters.httpMethod.includes(method)"
+                                            @change="toggleFilter(dataTableFilters.httpMethod, method)"
+                                            class="mr-2"
+                                        >
+                                        <span class="text-sm text-gray-700 dark:text-gray-300">{{ method }}</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Status Code Filter -->
+                            <div class="mb-6">
+                                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Status Code</label>
+                                <div class="space-y-2 max-h-40 overflow-y-auto">
+                                    <div 
+                                        v-for="status in getUniqueValues(getAllResults(), 'status')" 
+                                        :key="status"
+                                        class="flex items-center"
+                                    >
+                                        <input 
+                                            type="checkbox"
+                                            :checked="dataTableFilters.statusCode.includes(status)"
+                                            @change="toggleFilter(dataTableFilters.statusCode, status)"
+                                            class="mr-2"
+                                        >
+                                        <span class="text-sm text-gray-700 dark:text-gray-300">{{ status }}</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Right Content - Table -->
+                        <div class="flex-1 p-6">
+                            <!-- Results Summary -->
+                            <div class="mb-4 flex items-center justify-between">
+                                <div class="text-sm text-gray-600 dark:text-gray-400">
+                                    Showing {{ getPaginatedResults(getFilteredResults(getAllResults(), dataTableFilters), dataTableCurrentPage, dataTablePerPage).length }} 
+                                    of {{ getFilteredResults(getAllResults(), dataTableFilters).length }} results
+                                </div>
+                                <div class="text-sm text-gray-600 dark:text-gray-400">
+                                    Total threats: {{ getAllResults().length }}
+                                </div>
+                            </div>
+
+                            <!-- Table -->
+                            <div class="overflow-x-auto">
+                                <table class="w-full text-sm">
+                                    <thead class="bg-gray-50 dark:bg-gray-700">
+                                        <tr>
+                                            <th class="px-4 py-3 text-left font-medium text-gray-700 dark:text-gray-300">IP Address</th>
+                                            <th class="px-4 py-3 text-left font-medium text-gray-700 dark:text-gray-300">Timestamp</th>
+                                            <th class="px-4 py-3 text-left font-medium text-gray-700 dark:text-gray-300">Method</th>
+                                            <th class="px-4 py-3 text-left font-medium text-gray-700 dark:text-gray-300">Path</th>
+                                            <th class="px-4 py-3 text-left font-medium text-gray-700 dark:text-gray-300">Status</th>
+                                            <th class="px-4 py-3 text-left font-medium text-gray-700 dark:text-gray-300">Attack Type</th>
+                                            <th class="px-4 py-3 text-left font-medium text-gray-700 dark:text-gray-300">Reason</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
+                                        <tr 
+                                            v-for="result in getPaginatedResults(getFilteredResults(getAllResults(), dataTableFilters), dataTableCurrentPage, dataTablePerPage)" 
+                                            :key="`${result.ip}-${result.timestamp}-${result.path}`"
+                                            class="hover:bg-gray-50 dark:hover:bg-gray-700"
+                                        >
+                                            <td class="px-4 py-3 text-gray-900 dark:text-white font-mono">{{ result.ip }}</td>
+                                            <td class="px-4 py-3 text-gray-600 dark:text-gray-400">{{ formatTimestamp(result.timestamp) }}</td>
+                                            <td class="px-4 py-3">
+                                                <span class="px-2 py-1 text-xs font-medium rounded-full bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400">
+                                                    {{ result.method }}
+                                                </span>
+                                            </td>
+                                            <td class="px-4 py-3 text-gray-600 dark:text-gray-400 font-mono max-w-xs truncate" :title="result.path">{{ result.path }}</td>
+                                            <td class="px-4 py-3">
+                                                <span :class="['px-2 py-1 text-xs font-medium rounded-full', getStatusBadgeClass(result.status)]">
+                                                    {{ result.status }}
+                                                </span>
+                                            </td>
+                                            <td class="px-4 py-3 text-gray-600 dark:text-gray-400">{{ result.attack_type }}</td>
+                                            <td class="px-4 py-3 text-gray-600 dark:text-gray-400 max-w-xs truncate" :title="result.suspicion_reason">{{ result.suspicion_reason }}</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+
+                            <!-- Pagination -->
+                            <div class="mt-6 flex items-center justify-between">
+                                <div class="text-sm text-gray-600 dark:text-gray-400">
+                                    Page {{ dataTableCurrentPage }} of {{ getTotalPages(getFilteredResults(getAllResults(), dataTableFilters).length, dataTablePerPage) }}
+                                </div>
+                                <div class="flex space-x-2">
+                                    <button 
+                                        @click="dataTableCurrentPage = Math.max(1, dataTableCurrentPage - 1)"
+                                        :disabled="dataTableCurrentPage === 1"
+                                        class="px-3 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 dark:hover:bg-gray-700"
+                                    >
+                                        Previous
+                                    </button>
+                                    <button 
+                                        @click="dataTableCurrentPage = Math.min(getTotalPages(getFilteredResults(getAllResults(), dataTableFilters).length, dataTablePerPage), dataTableCurrentPage + 1)"
+                                        :disabled="dataTableCurrentPage === getTotalPages(getFilteredResults(getAllResults(), dataTableFilters).length, dataTablePerPage)"
+                                        class="px-3 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 dark:hover:bg-gray-700"
+                                    >
+                                        Next
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </div>
         </main>
 
@@ -332,6 +530,177 @@
                 </div>
                 <div class="p-6 overflow-y-auto max-h-[70vh]">
                     <pre class="bg-gray-100 dark:bg-gray-900 p-4 rounded-lg overflow-x-auto text-sm text-gray-900 dark:text-gray-100"><code class="text-gray-900 dark:text-gray-100">{{ currentFunctionCode }}</code></pre>
+                </div>
+            </div>
+        </div>
+
+        <!-- Modal for View Results -->
+        <div v-if="showResultsModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <div class="bg-white dark:bg-gray-800 rounded-lg max-w-7xl w-full max-h-[90vh] overflow-hidden">
+                <div class="flex justify-between items-center p-6 border-b border-gray-200 dark:border-gray-700">
+                    <h3 class="text-lg font-semibold text-gray-900 dark:text-white">
+                        {{ currentResultsTitle }} - Detection Results
+                    </h3>
+                    <button 
+                        @click="showResultsModal = false"
+                        class="text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
+                    >
+                        <i class="fas fa-times text-xl"></i>
+                    </button>
+                </div>
+                
+                <div class="flex max-h-[80vh]">
+                    <!-- Left Sidebar - Filters -->
+                    <div class="w-80 border-r border-gray-200 dark:border-gray-700 p-6 overflow-y-auto">
+                        <div class="flex items-center justify-between mb-6">
+                            <h4 class="text-md font-semibold text-gray-900 dark:text-white">Filters</h4>
+                            <button 
+                                @click="clearAllFilters('results')"
+                                class="text-sm text-primary-600 hover:text-primary-700 dark:text-primary-400"
+                            >
+                                Clear All
+                            </button>
+                        </div>
+
+                        <!-- Search Filter -->
+                        <div class="mb-6">
+                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Search</label>
+                            <input 
+                                v-model="resultsFilters.search"
+                                type="text"
+                                placeholder="Search all fields..."
+                                class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm"
+                            >
+                        </div>
+
+                        <!-- IP Address Filter -->
+                        <div class="mb-6">
+                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">IP Address</label>
+                            <input 
+                                v-model="resultsFilters.ipAddress"
+                                type="text"
+                                placeholder="Filter by IP..."
+                                class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-white text-sm"
+                            >
+                        </div>
+
+                        <!-- HTTP Method Filter -->
+                        <div class="mb-6">
+                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">HTTP Method</label>
+                            <div class="space-y-2">
+                                <div 
+                                    v-for="method in getUniqueValues(currentResults, 'method')" 
+                                    :key="method"
+                                    class="flex items-center"
+                                >
+                                    <input 
+                                        type="checkbox"
+                                        :checked="resultsFilters.httpMethod.includes(method)"
+                                        @change="toggleFilter(resultsFilters.httpMethod, method)"
+                                        class="mr-2"
+                                    >
+                                    <span class="text-sm text-gray-700 dark:text-gray-300">{{ method }}</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Status Code Filter -->
+                        <div class="mb-6">
+                            <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Status Code</label>
+                            <div class="space-y-2 max-h-32 overflow-y-auto">
+                                <div 
+                                    v-for="status in getUniqueValues(currentResults, 'status')" 
+                                    :key="status"
+                                    class="flex items-center"
+                                >
+                                    <input 
+                                        type="checkbox"
+                                        :checked="resultsFilters.statusCode.includes(status)"
+                                        @change="toggleFilter(resultsFilters.statusCode, status)"
+                                        class="mr-2"
+                                    >
+                                    <span class="text-sm text-gray-700 dark:text-gray-300">{{ status }}</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Right Content - Results Table -->
+                    <div class="flex-1 p-6 overflow-y-auto">
+                        <!-- Results Summary -->
+                        <div class="mb-4 flex items-center justify-between">
+                            <div class="text-sm text-gray-600 dark:text-gray-400">
+                                Showing {{ getPaginatedResults(getFilteredResults(currentResults, resultsFilters), resultsCurrentPage, resultsPerPage).length }} 
+                                of {{ getFilteredResults(currentResults, resultsFilters).length }} results
+                            </div>
+                            <div class="text-sm text-gray-600 dark:text-gray-400">
+                                Total detections: {{ currentResults.length }}
+                            </div>
+                        </div>
+
+                        <!-- Results Table -->
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-sm">
+                                <thead class="bg-gray-50 dark:bg-gray-700">
+                                    <tr>
+                                        <th class="px-4 py-3 text-left font-medium text-gray-700 dark:text-gray-300">IP Address</th>
+                                        <th class="px-4 py-3 text-left font-medium text-gray-700 dark:text-gray-300">Timestamp</th>
+                                        <th class="px-4 py-3 text-left font-medium text-gray-700 dark:text-gray-300">Method</th>
+                                        <th class="px-4 py-3 text-left font-medium text-gray-700 dark:text-gray-300">Path</th>
+                                        <th class="px-4 py-3 text-left font-medium text-gray-700 dark:text-gray-300">Status</th>
+                                        <th class="px-4 py-3 text-left font-medium text-gray-700 dark:text-gray-300">User Agent</th>
+                                        <th class="px-4 py-3 text-left font-medium text-gray-700 dark:text-gray-300">Reason</th>
+                                    </tr>
+                                </thead>
+                                <tbody class="divide-y divide-gray-200 dark:divide-gray-700">
+                                    <tr 
+                                        v-for="result in getPaginatedResults(getFilteredResults(currentResults, resultsFilters), resultsCurrentPage, resultsPerPage)" 
+                                        :key="`${result.ip}-${result.timestamp}-${result.path}`"
+                                        class="hover:bg-gray-50 dark:hover:bg-gray-700"
+                                    >
+                                        <td class="px-4 py-3 text-gray-900 dark:text-white font-mono">{{ result.ip }}</td>
+                                        <td class="px-4 py-3 text-gray-600 dark:text-gray-400">{{ formatTimestamp(result.timestamp) }}</td>
+                                        <td class="px-4 py-3">
+                                            <span class="px-2 py-1 text-xs font-medium rounded-full bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-400">
+                                                {{ result.method }}
+                                            </span>
+                                        </td>
+                                        <td class="px-4 py-3 text-gray-600 dark:text-gray-400 font-mono max-w-xs truncate" :title="result.path">{{ result.path }}</td>
+                                        <td class="px-4 py-3">
+                                            <span :class="['px-2 py-1 text-xs font-medium rounded-full', getStatusBadgeClass(result.status)]">
+                                                {{ result.status }}
+                                            </span>
+                                        </td>
+                                        <td class="px-4 py-3 text-gray-600 dark:text-gray-400 max-w-xs truncate" :title="result.user_agent">{{ result.user_agent }}</td>
+                                        <td class="px-4 py-3 text-gray-600 dark:text-gray-400 max-w-xs truncate" :title="result.suspicion_reason">{{ result.suspicion_reason }}</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <!-- Pagination -->
+                        <div class="mt-6 flex items-center justify-between">
+                            <div class="text-sm text-gray-600 dark:text-gray-400">
+                                Page {{ resultsCurrentPage }} of {{ getTotalPages(getFilteredResults(currentResults, resultsFilters).length, resultsPerPage) }}
+                            </div>
+                            <div class="flex space-x-2">
+                                <button 
+                                    @click="resultsCurrentPage = Math.max(1, resultsCurrentPage - 1)"
+                                    :disabled="resultsCurrentPage === 1"
+                                    class="px-3 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 dark:hover:bg-gray-700"
+                                >
+                                    Previous
+                                </button>
+                                <button 
+                                    @click="resultsCurrentPage = Math.min(getTotalPages(getFilteredResults(currentResults, resultsFilters).length, resultsPerPage), resultsCurrentPage + 1)"
+                                    :disabled="resultsCurrentPage === getTotalPages(getFilteredResults(currentResults, resultsFilters).length, resultsPerPage)"
+                                    class="px-3 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded disabled:opacity-50 disabled:cursor-not-allowed hover:bg-gray-50 dark:hover:bg-gray-700"
+                                >
+                                    Next
+                                </button>
+                            </div>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
