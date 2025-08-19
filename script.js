@@ -40,6 +40,18 @@ createApp({
             },
             dataTableCurrentPage: 1,
             dataTablePerPage: 50,
+            // Report generation
+            showReportModal: false,
+            showGeneratedReportModal: false,
+            isGeneratingReport: false,
+            generatedReport: '',
+            renderedReport: '',
+            reportConfig: {
+                providerId: 'gemini',
+                apiKey: '',
+                customEndpoint: ''
+            },
+            llmProviders: [],
             tabs: [
                 {
                     id: 'security-analysis',
@@ -61,6 +73,7 @@ createApp({
     },
     mounted() {
         this.initializeAttackTypes();
+        this.initializeLLMProviders();
         // Check for saved theme preference or default to light mode
         const savedTheme = localStorage.getItem('theme');
         if (savedTheme) {
@@ -84,6 +97,14 @@ createApp({
                 });
             } catch (error) {
                 console.error('Failed to load attack types:', error);
+            }
+        },
+        async initializeLLMProviders() {
+            try {
+                const module = await import('./reportGenerator.js');
+                this.llmProviders = module.LLM_PROVIDERS;
+            } catch (error) {
+                console.error('Failed to load LLM providers:', error);
             }
         },
         toggleDarkMode() {
@@ -544,6 +565,135 @@ createApp({
                     notification.parentNode.removeChild(notification);
                 }
             }, 1500);
+        },
+        hasAnyResults() {
+            return Object.values(this.threatResults).some(results => results && results.length > 0);
+        },
+        getTotalThreats() {
+            return Object.values(this.threatResults).reduce((sum, results) => sum + (results?.length || 0), 0);
+        },
+        getUniqueAttackTypes() {
+            return Object.keys(this.threatResults).filter(key => this.threatResults[key] && this.threatResults[key].length > 0);
+        },
+        needsCustomEndpoint() {
+            const provider = this.llmProviders.find(p => p.id === this.reportConfig.providerId);
+            return provider && provider.customEndpoint;
+        },
+        getEndpointPlaceholder() {
+            const provider = this.llmProviders.find(p => p.id === this.reportConfig.providerId);
+            return provider?.defaultEndpoint || 'https://api.example.com/v1/chat/completions';
+        },
+        canGenerateReport() {
+            return this.reportConfig.providerId && 
+                   this.reportConfig.apiKey.trim() && 
+                   this.hasAnyResults() &&
+                   (!this.needsCustomEndpoint() || this.reportConfig.customEndpoint.trim());
+        },
+        closeReportModal() {
+            this.showReportModal = false;
+            this.reportConfig = {
+                providerId: 'gemini',
+                apiKey: '',
+                customEndpoint: ''
+            };
+        },
+        async generateAIReport() {
+            if (!this.canGenerateReport() || this.isGeneratingReport) return;
+            
+            this.isGeneratingReport = true;
+            
+            try {
+                // Prepare data for report generation
+                const allResults = this.getAllResults();
+                const summary = this.prepareSummaryData(allResults);
+                const datasetInfo = {
+                    fileName: this.selectedFile?.name || 'Demo Dataset',
+                    datasetUrl: this.selectedFile ? 'User Upload' : 'https://raw.githubusercontent.com/Yadav-Aayansh/gramener-datasets/refs/heads/add-server-logs/server_logs.zip'
+                };
+                
+                // Import and use report generation service
+                const { reportGenerationService } = await import('./reportGenerator.js');
+                const result = await reportGenerationService.generateReport(
+                    allResults,
+                    summary,
+                    datasetInfo,
+                    this.reportConfig
+                );
+                
+                this.generatedReport = result.markdown;
+                this.renderMarkdownReport();
+                
+                // Close config modal and show report
+                this.showReportModal = false;
+                this.showGeneratedReportModal = true;
+                
+                this.showNotification('AI report generated successfully!', 'success');
+                
+            } catch (error) {
+                console.error('Error generating AI report:', error);
+                this.showNotification(`Failed to generate report: ${error.message}`, 'error');
+            } finally {
+                this.isGeneratingReport = false;
+            }
+        },
+        prepareSummaryData(allResults) {
+            // Prepare attack type counts
+            const attackTypeCounts = {};
+            allResults.forEach(result => {
+                const attackType = result.attack_type || 'Unknown';
+                attackTypeCounts[attackType] = (attackTypeCounts[attackType] || 0) + 1;
+            });
+            
+            // Prepare top attackers
+            const attackerCounts = {};
+            allResults.forEach(result => {
+                attackerCounts[result.ip] = (attackerCounts[result.ip] || 0) + 1;
+            });
+            const topAttackers = Object.entries(attackerCounts)
+                .map(([ip, count]) => ({ ip, count }))
+                .sort((a, b) => b.count - a.count);
+            
+            // Prepare status code distribution
+            const statusCodeDistribution = {};
+            allResults.forEach(result => {
+                statusCodeDistribution[result.status] = (statusCodeDistribution[result.status] || 0) + 1;
+            });
+            
+            return {
+                totalThreats: allResults.length,
+                attackTypeCounts,
+                topAttackers,
+                statusCodeDistribution
+            };
+        },
+        renderMarkdownReport() {
+            if (typeof marked !== 'undefined' && typeof DOMPurify !== 'undefined') {
+                // Configure marked options
+                marked.setOptions({
+                    breaks: true,
+                    gfm: true
+                });
+                
+                // Convert markdown to HTML and sanitize
+                const rawHtml = marked.parse(this.generatedReport);
+                this.renderedReport = DOMPurify.sanitize(rawHtml);
+            } else {
+                // Fallback: display as plain text with basic formatting
+                this.renderedReport = `<pre class="whitespace-pre-wrap">${this.generatedReport}</pre>`;
+            }
+        },
+        downloadReport() {
+            const blob = new Blob([this.generatedReport], { type: 'text/markdown' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `security-report-${new Date().toISOString().split('T')[0]}.md`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+            
+            this.showNotification('Report downloaded successfully!', 'success');
         }
     }
 }).mount('#app');
