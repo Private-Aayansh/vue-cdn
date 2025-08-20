@@ -43,10 +43,12 @@ createApp({
             // Report generation
             showReportModal: false,
             showGeneratedReportModal: false,
+            showSettingsModal: false,
             isGeneratingReport: false,
             generatedReport: '',
             renderedReport: '',
-            reportConfig: {
+            // Persistent settings stored in localStorage
+            settings: {
                 providerId: 'gemini',
                 apiKey: '',
                 customEndpoint: ''
@@ -74,6 +76,7 @@ createApp({
     mounted() {
         this.initializeAttackTypes();
         this.initializeLLMProviders();
+        this.loadSettings();
         // Check for saved theme preference or default to light mode
         const savedTheme = localStorage.getItem('theme');
         if (savedTheme) {
@@ -106,6 +109,32 @@ createApp({
             } catch (error) {
                 console.error('Failed to load LLM providers:', error);
             }
+        },
+        loadSettings() {
+            try {
+                const savedSettings = localStorage.getItem('threatAnalysisSettings');
+                if (savedSettings) {
+                    this.settings = { ...this.settings, ...JSON.parse(savedSettings) };
+                }
+            } catch (error) {
+                console.error('Failed to load settings:', error);
+            }
+        },
+        saveSettings() {
+            try {
+                localStorage.setItem('threatAnalysisSettings', JSON.stringify(this.settings));
+                this.showNotification('Settings saved successfully!', 'success');
+                this.showSettingsModal = false;
+            } catch (error) {
+                console.error('Failed to save settings:', error);
+                this.showNotification('Failed to save settings', 'error');
+            }
+        },
+        openSettings() {
+            this.showSettingsModal = true;
+        },
+        closeSettings() {
+            this.showSettingsModal = false;
         },
         toggleDarkMode() {
             this.darkMode = !this.darkMode;
@@ -576,26 +605,26 @@ createApp({
             return Object.keys(this.threatResults).filter(key => this.threatResults[key] && this.threatResults[key].length > 0);
         },
         needsCustomEndpoint() {
-            const provider = this.llmProviders.find(p => p.id === this.reportConfig.providerId);
+            const provider = this.llmProviders.find(p => p.id === this.settings.providerId);
             return provider && provider.customEndpoint;
         },
         getEndpointPlaceholder() {
-            const provider = this.llmProviders.find(p => p.id === this.reportConfig.providerId);
+            const provider = this.llmProviders.find(p => p.id === this.settings.providerId);
             return provider?.defaultEndpoint || 'https://api.example.com/v1/chat/completions';
         },
         canGenerateReport() {
-            return this.reportConfig.providerId && 
-                   this.reportConfig.apiKey.trim() && 
+            return this.settings.providerId && 
+                   this.settings.apiKey.trim() && 
                    this.hasAnyResults() &&
-                   (!this.needsCustomEndpoint() || this.reportConfig.customEndpoint.trim());
+                   (!this.needsCustomEndpoint() || this.settings.customEndpoint.trim());
         },
-        closeReportModal() {
-            this.showReportModal = false;
-            this.reportConfig = {
-                providerId: 'gemini',
-                apiKey: '',
-                customEndpoint: ''
-            };
+        openReportGenerator() {
+            if (!this.canGenerateReport()) {
+                this.showNotification('Please configure your API keys in Settings first', 'warning');
+                this.openSettings();
+                return;
+            }
+            this.generateAIReport();
         },
         async generateAIReport() {
             if (!this.canGenerateReport() || this.isGeneratingReport) return;
@@ -617,14 +646,13 @@ createApp({
                     allResults,
                     summary,
                     datasetInfo,
-                    this.reportConfig
+                    this.settings
                 );
                 
                 this.generatedReport = result.markdown;
                 this.renderMarkdownReport();
                 
-                // Close config modal and show report
-                this.showReportModal = false;
+                // Show generated report modal
                 this.showGeneratedReportModal = true;
                 
                 this.showNotification('AI report generated successfully!', 'success');
