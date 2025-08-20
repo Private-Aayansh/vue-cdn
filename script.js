@@ -47,6 +47,8 @@ createApp({
             isGeneratingReport: false,
             generatedReport: '',
             renderedReport: '',
+            // Flag to track if user initiated report generation but needs to set API keys first
+            pendingReportGeneration: false,
             // Persistent settings stored in localStorage
             settings: {
                 providerId: 'gemini',
@@ -125,6 +127,12 @@ createApp({
                 localStorage.setItem('threatAnalysisSettings', JSON.stringify(this.settings));
                 this.showNotification('Settings saved successfully!', 'success');
                 this.showSettingsModal = false;
+                
+                // If user was trying to generate a report, do it now
+                if (this.pendingReportGeneration) {
+                    this.pendingReportGeneration = false;
+                    this.generateAIReport();
+                }
             } catch (error) {
                 console.error('Failed to save settings:', error);
                 this.showNotification('Failed to save settings', 'error');
@@ -620,6 +628,7 @@ createApp({
         },
         openReportGenerator() {
             if (!this.canGenerateReport()) {
+                this.pendingReportGeneration = true;
                 this.showNotification('Please configure your API keys in Settings first', 'warning');
                 this.openSettings();
                 return;
@@ -628,6 +637,9 @@ createApp({
         },
         async generateAIReport() {
             if (!this.canGenerateReport() || this.isGeneratingReport) return;
+            
+            // Provide immediate feedback to user
+            this.showNotification('Generating AI report...', 'info');
             
             this.isGeneratingReport = true;
             
