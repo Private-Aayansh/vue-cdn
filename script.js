@@ -49,6 +49,14 @@ createApp({
             renderedReport: '',
             // Flag to track if user initiated report generation but needs to set API keys first
             pendingReportGeneration: false,
+            // Custom threat detection
+            showCustomThreatModal: false,
+            customThreatName: '',
+            customThreatDescription: '',
+            isGeneratingCustomThreat: false,
+            customDetectors: [],
+            customThreatResults: {},
+            customScanningStates: {},
             // Persistent settings stored in localStorage
             settings: {
                 providerId: 'gemini',
@@ -100,8 +108,25 @@ createApp({
                     this.scanningStates[attack.endpoint] = false;
                     this.threatResults[attack.endpoint] = [];
                 });
+                
+                // Load custom detectors
+                await this.loadCustomDetectors();
             } catch (error) {
                 console.error('Failed to load attack types:', error);
+            }
+        },
+        async loadCustomDetectors() {
+            try {
+                const { customThreatService } = await import('./customThreatService.js');
+                this.customDetectors = customThreatService.getCustomDetectors();
+                
+                // Initialize scanning states for custom detectors
+                this.customDetectors.forEach(detector => {
+                    this.customScanningStates[detector.id] = false;
+                    this.customThreatResults[detector.id] = [];
+                });
+            } catch (error) {
+                console.error('Failed to load custom detectors:', error);
             }
         },
         async initializeLLMProviders() {
@@ -734,6 +759,166 @@ createApp({
             URL.revokeObjectURL(url);
             
             this.showNotification('Report downloaded successfully!', 'success');
+        },
+        openCustomThreatModal() {
+            if (!this.canGenerateReport()) {
+                this.showNotification('Please configure your API keys in Settings first', 'warning');
+                this.openSettings();
+                return;
+            }
+            this.showCustomThreatModal = true;
+            this.customThreatName = '';
+            this.customThreatDescription = '';
+        },
+        closeCustomThreatModal() {
+            this.showCustomThreatModal = false;
+            this.customThreatName = '';
+            this.customThreatDescription = '';
+        },
+        async generateCustomThreat() {
+            if (!this.customThreatName.trim() || !this.customThreatDescription.trim()) {
+                this.showNotification('Please provide both threat name and description', 'warning');
+                return;
+            }
+            
+            if (this.isGeneratingCustomThreat) return;
+            
+            this.isGeneratingCustomThreat = true;
+            
+            try {
+                this.showNotification('Generating custom threat detector...', 'info');
+                
+                const { customThreatService } = await import('./customThreatService.js');
+                const detector = await customThreatService.generateCustomDetector(
+                    this.customThreatName,
+                    this.customThreatDescription,
+                    this.settings
+                );
+                
+                // Add to local state
+                this.customDetectors.push(detector);
+                this.customScanningStates[detector.id] = false;
+                this.customThreatResults[detector.id] = [];
+                
+                this.showNotification(`Custom threat detector "${detector.name}" created successfully!`, 'success');
+                this.closeCustomThreatModal();
+                
+            } catch (error) {
+                console.error('Error generating custom threat:', error);
+                this.showNotification(`Failed to generate custom threat: ${error.message}`, 'error');
+            } finally {
+                this.isGeneratingCustomThreat = false;
+            }
+        },
+        async scanCustomThreat(detectorId) {
+            if (!this.logData || this.customScanningStates[detectorId]) return;
+            
+            this.customScanningStates[detectorId] = true;
+            
+            try {
+                const { customThreatService } = await import('./customThreatService.js');
+                
+                // Simulate processing time for better UX
+                await new Promise(resolve => setTimeout(resolve, 1000));
+                
+                const results = customThreatService.executeCustomDetector(detectorId, this.logData);
+                this.customThreatResults[detectorId] = results;
+                
+                const detector = this.customDetectors.find(d => d.id === detectorId);
+                this.showNotification(
+                    `${detector?.name || 'Custom threat'} scan completed. Found ${results.length} threats.`,
+                    results.length > 0 ? 'warning' : 'success'
+                );
+                
+            } catch (error) {
+                console.error(`Error scanning custom threat ${detectorId}:`, error);
+                this.showNotification(`Error scanning custom threat: ${error.message}`, 'error');
+            } finally {
+                this.customScanningStates[detectorId] = false;
+            }
+        },
+        async viewCustomThreatFunction(detectorId) {
+            try {
+                const { customThreatService } = await import('./customThreatService.js');
+                const detector = customThreatService.getCustomDetector(detectorId);
+                
+                if (!detector) {
+                    this.showNotification('Custom detector not found', 'error');
+                    return;
+                }
+                
+                this.currentFunctionName = detector.name;
+                this.currentFunctionCode = detector.code;
+                this.showFunctionModal = true;
+                
+            } catch (error) {
+                console.error('Error viewing custom function:', error);
+                this.showNotification(`Error viewing function: ${error.message}`, 'error');
+            }
+        },
+        viewCustomResults(detectorId) {
+            const results = this.customThreatResults[detectorId] || [];
+            const detector = this.customDetectors.find(d => d.id === detectorId);
+            
+            this.currentResults = results;
+            this.currentResultsTitle = detector?.name || 'Custom Threat';
+            this.showResultsModal = true;
+            this.resultsCurrentPage = 1;
+            this.resetResultsFilters();
+        },
+        async deleteCustomDetector(detectorId) {
+            if (!confirm('Are you sure you want to delete this custom threat detector?')) {
+                return;
+            }
+            
+            try {
+                const { customThreatService } = await import('./customThreatService.js');
+                const success = customThreatService.deleteCustomDetector(detectorId);
+                
+                if (success) {
+                    // Remove from local state
+                    this.customDetectors = this.customDetectors.filter(d => d.id !== detectorId);
+                    delete this.customScanningStates[detectorId];
+                    delete this.customThreatResults[detectorId];
+                    
+                    this.showNotification('Custom threat detector deleted successfully', 'success');
+                } else {
+                    this.showNotification('Failed to delete custom threat detector', 'error');
+                }
+            } catch (error) {
+                console.error('Error deleting custom detector:', error);
+                this.showNotification(`Error deleting detector: ${error.message}`, 'error');
+            }
+        },
+        async runAllCustomScans() {
+            if (!this.logData || this.customDetectors.length === 0) return;
+            
+            try {
+                this.showNotification('Running all custom threat scans...', 'info');
+                
+                // Run all custom scans in parallel
+                const scanPromises = this.customDetectors.map(detector => 
+                    this.scanCustomThreat(detector.id)
+                );
+                
+                await Promise.all(scanPromises);
+                
+                const totalThreats = Object.values(this.customThreatResults).reduce((sum, results) => sum + results.length, 0);
+                this.showNotification(
+                    `All custom scans completed. Found ${totalThreats} total threats.`,
+                    totalThreats > 0 ? 'warning' : 'success'
+                );
+                
+            } catch (error) {
+                console.error('Error running all custom scans:', error);
+                this.showNotification(`Error running custom scans: ${error.message}`, 'error');
+            }
+        },
+        hasAnyCustomResults() {
+            return Object.values(this.customThreatResults).some(results => results && results.length > 0);
+        },
+        getTotalCustomThreats() {
+            return Object.values(this.customThreatResults).reduce((sum, results) => sum + (results?.length || 0), 0);
         }
     }
 }).mount('#app');
