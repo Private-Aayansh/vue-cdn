@@ -570,6 +570,19 @@ createApp({
                     });
                 });
             });
+            
+            // Add custom threat results
+            Object.keys(this.customThreatResults).forEach(detectorId => {
+                const results = this.customThreatResults[detectorId] || [];
+                const detector = this.customDetectors.find(d => d.id === detectorId);
+                results.forEach(result => {
+                    allResults.push({
+                        ...result,
+                        attack_type: detector?.name || 'Custom Threat'
+                    });
+                });
+            });
+            
             return allResults;
         },
         getUniqueValues(results, field) {
@@ -631,8 +644,17 @@ createApp({
         hasAnyResults() {
             return Object.values(this.threatResults).some(results => results && results.length > 0);
         },
+        hasAnyResults() {
+            return Object.values(this.threatResults).some(results => results && results.length > 0) ||
+                   Object.values(this.customThreatResults).some(results => results && results.length > 0);
+        },
         getTotalThreats() {
             return Object.values(this.threatResults).reduce((sum, results) => sum + (results?.length || 0), 0);
+        },
+        getTotalThreats() {
+            const builtInThreats = Object.values(this.threatResults).reduce((sum, results) => sum + (results?.length || 0), 0);
+            const customThreats = Object.values(this.customThreatResults).reduce((sum, results) => sum + (results?.length || 0), 0);
+            return builtInThreats + customThreats;
         },
         getUniqueAttackTypes() {
             return Object.keys(this.threatResults).filter(key => this.threatResults[key] && this.threatResults[key].length > 0);
