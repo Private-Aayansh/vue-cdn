@@ -673,6 +673,11 @@ createApp({
                    this.hasAnyResults() &&
                    (!this.needsCustomEndpoint() || this.settings.customEndpoint.trim());
         },
+        canCustomAnalysis() {
+            return this.settings.providerId && 
+                   this.settings.apiKey.trim() && 
+                   (!this.needsCustomEndpoint() || this.settings.customEndpoint.trim());
+        },
         openReportGenerator() {
             if (!this.canGenerateReport()) {
                 this.pendingReportGeneration = true;
@@ -783,7 +788,7 @@ createApp({
             this.showNotification('Report downloaded successfully!', 'success');
         },
         openCustomThreatModal() {
-            if (!this.canGenerateReport()) {
+            if (!this.canCustomAnalysis()) {
                 this.showNotification('Please configure your API keys in Settings first', 'warning');
                 this.openSettings();
                 return;
